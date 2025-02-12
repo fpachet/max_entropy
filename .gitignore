@@ -1,4 +1,4 @@
-# Python
+git# Python
 *.py[cod]
 __pycache__/
 *.so
@@ -22,7 +22,7 @@ ENV/
 *.sublime-project
 
 # macOS
-.DS_Store
+**/.DS_Store
 .AppleDouble
 .LSOverride
 ._*
