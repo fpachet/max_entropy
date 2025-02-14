@@ -189,10 +189,13 @@ class MaxEntropyMelodyGenerator:
         mid.save(output_file)
 
 # Utilisation
-generator = MaxEntropyMelodyGenerator("../data/test_sequence_2notes.mid", Kmax=3)
+generator = MaxEntropyMelodyGenerator("../data/test_sequence_2notes.mid", Kmax=6)
 # generator = MaxEntropyMelodyGenerator("../data/test_sequence_arpeggios.mid", Kmax=6)
 t0 = time.perf_counter_ns()
-h_opt, J_opt = generator.train(max_iter=4)
+h_opt, J_opt = generator.train(max_iter=3)
+print(f"{h_opt=}")
+print(f"{J_opt=}")
+
 t1 = time.perf_counter_ns()
 print(f"time: {(t1-t0)/1000000}")
 print(f"time: {generator.elapsed_ns_in_function/1000000}ms")
