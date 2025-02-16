@@ -48,7 +48,6 @@ class MaxEntropyMelodyGenerator:
             z += np.exp(energy)
         return z
 
-    import numpy as np
     @profile
     def compute_partition_function_with_tests(self, h, J, context):
         t0 = time.perf_counter_ns()
@@ -67,7 +66,7 @@ class MaxEntropyMelodyGenerator:
         self.elapsed_ns_in_function += time.perf_counter_ns() - t0
         return res
 
-    compute_partition_function = compute_partition_function_with_tests
+    compute_partition_function = compute_partition_function_old
     @profile
     def negative_log_likelihood(self, params):
         self.cpt_iterations = self.cpt_iterations + 1
@@ -76,7 +75,6 @@ class MaxEntropyMelodyGenerator:
         J = {k: J_flat[k * self.vocabulary_size() ** 2:(k + 1) * self.vocabulary_size() ** 2].reshape(
             (self.vocabulary_size(), self.vocabulary_size()))
             for k in range(self.Kmax)}
-        # J2 = np.array(params[self.vocabulary_size():]).reshape((self.Kmax, self.vocabulary_size(), self.vocabulary_size()))
         loss = 0
         M = len(self.seq)
         for i in range(M):
@@ -90,7 +88,7 @@ class MaxEntropyMelodyGenerator:
         loss *= -1 / M
         l1_reg = sum(np.abs(J[k]).sum() for k in range(self.Kmax))
         loss += (self.lambda_reg / M) * l1_reg
-        print(loss)
+        print(f"{loss=}")
         return loss
 
     @profile
@@ -141,11 +139,11 @@ class MaxEntropyMelodyGenerator:
                         if i - k - 1 >= 0 and r == self.seq[i - k - 1] and r2 == s_0:
                             prob += 1
                         if i + k + 1 < M and r == s_0 and r2 == self.seq[i + k + 1]:
-                            prob +=  1
+                            prob += 1
                         if i - k - 1 >= 0 and r == self.seq[i - k - 1]:
-                            prob -= np.exp(h[r2] + self.sum_energy_in_context(J, context, r2))
+                            prob -= np.exp(h[r2] + self.sum_energy_in_context(J, context, r2)) / Z
                         if i + k + 1 < M and r2 == self.seq[i + k + 1]:
-                            prob -= np.exp(h[r] + self.sum_energy_in_context(J, context, r))
+                            prob -= np.exp(h[r] + self.sum_energy_in_context(J, context, r)) / Z
                     grad_J[k][r][r2] = -prob / M
                     grad_J[k][r][r2] += (self.lambda_reg / M) * np.abs(J[k][r][r2])
         grad_J_flat = np.concatenate([grad_J[k].flatten() for k in range(self.Kmax)])
@@ -174,7 +172,6 @@ class MaxEntropyMelodyGenerator:
             proposed_energy = h[proposed_note] + self.sum_energy_in_context(J, context, proposed_note)
             acceptance_ratio = min(1, np.exp(proposed_energy - current_energy))
             if random.random() < acceptance_ratio:
-                # print(f"change {current_note} to {proposed_note}")
                 sequence[idx] = proposed_note
         # build sequence of notes
         result = [self.idx_to_note[i] for i in sequence]
@@ -189,10 +186,10 @@ class MaxEntropyMelodyGenerator:
         mid.save(output_file)
 
 # Utilisation
-generator = MaxEntropyMelodyGenerator("../data/test_sequence_2notes.mid", Kmax=6)
+generator = MaxEntropyMelodyGenerator("../data/test_sequence_2notes.mid", Kmax=4)
 # generator = MaxEntropyMelodyGenerator("../data/test_sequence_arpeggios.mid", Kmax=6)
 t0 = time.perf_counter_ns()
-h_opt, J_opt = generator.train(max_iter=3)
+h_opt, J_opt = generator.train(max_iter=20)
 print(f"{h_opt=}")
 print(f"{J_opt=}")
 
