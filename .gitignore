@@ -50,3 +50,4 @@ MANIFEST
 *.log
 local_settings.py
 
+data/generated_melody.mid
