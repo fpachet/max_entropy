@@ -51,3 +51,4 @@ MANIFEST
 local_settings.py
 
 data/generated_melody.mid
+*.pclprof
