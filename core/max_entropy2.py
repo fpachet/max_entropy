@@ -15,15 +15,13 @@ class MaxEntropyMelodyGenerator:
         self.lambda_reg = lambda_reg
         self.notes = self.extract_notes()
         self.note_set = list(set(self.notes))
+        self.voc_size = len(self.note_set)
         self.note_to_idx = {note: i for i, note in enumerate(self.note_set)}
         self.idx_to_note = {i: note for note, i in self.note_to_idx.items()}
         self.seq = np.array([self.note_to_idx[note] for note in self.notes])
         self.cpt_iterations = 0
         self.cpt_sum_energy = 0
         self.cpt_compute_partition = 0
-
-    def vocabulary_size(self):
-        return len(self.note_set)
 
     def extract_notes(self):
         """ Extracts MIDI note sequence from a MIDI file. """
@@ -54,14 +52,14 @@ class MaxEntropyMelodyGenerator:
         # return np.exp([h[sigma] + self.sum_energy_in_context(J, context, sigma) for sigma in range(self.vocabulary_size())]).sum()
         self.cpt_compute_partition += 1
         z = 0
-        for sigma in range(self.vocabulary_size()):
+        for sigma in range(self.voc_size):
             energy = h[sigma] + self.sum_energy_in_context(J, context, sigma)
             z += np.exp(energy)
         return z
 
     def negative_log_likelihood(self, params):
         self.cpt_iterations = self.cpt_iterations + 1
-        voc_size = self.vocabulary_size()
+        voc_size = self.voc_size
         h = params[:voc_size]
         J_flat = params[voc_size:]
         J = {k: J_flat[k * voc_size ** 2:(k + 1) * voc_size ** 2].reshape(
@@ -90,18 +88,17 @@ class MaxEntropyMelodyGenerator:
 
 
     def gradient(self, params):
-        voc_size = self.vocabulary_size()
-        voc_size_2 = voc_size ** 2
-        h = params[:voc_size]
-        J_flat = params[voc_size:]
+        voc_size_2 = self.voc_size ** 2
+        h = params[:self.voc_size]
+        J_flat = params[self.voc_size:]
         J = {k: J_flat[k * voc_size_2:(k + 1) * voc_size_2].reshape(
-            voc_size, voc_size)
+            self.voc_size, self.voc_size)
             for k in range(self.Kmax)}
         grad_h = np.zeros_like(h)
         grad_J = {k: np.zeros_like(J[k]) for k in range(self.Kmax)}
         M = len(self.seq)
         # local fields
-        for r in range(voc_size):
+        for r in range(self.voc_size):
             sum_grad = 0
             for mu, s_0 in enumerate(self.seq):
                 if r == s_0:
@@ -113,8 +110,8 @@ class MaxEntropyMelodyGenerator:
             grad_h[r] = -sum_grad / M
         # J
         for k in range(self.Kmax):
-            for r in range(voc_size):
-                for r2 in range(voc_size):
+            for r in range(self.voc_size):
+                for r2 in range(self.voc_size):
                     prob = 0
                     for mu, s_0 in enumerate(self.seq):
                         context = self.build_context(self.seq, mu)
@@ -133,14 +130,13 @@ class MaxEntropyMelodyGenerator:
 
 
     def train(self, max_iter=1000):
-        voc_length = self.vocabulary_size()
-        voc_2 = voc_length ** 2
-        params_init = np.zeros(voc_length + self.Kmax * voc_2)
+        voc_2 = self.voc_size ** 2
+        params_init = np.zeros(self.voc_size + self.Kmax * voc_2)
         res = minimize(self.negative_log_likelihood, params_init, method='L-BFGS-B', jac=self.gradient,
                        options={'maxiter': max_iter})
-        return res.x[:voc_length], {
-            k: res.x[voc_length + k * voc_2:voc_length + (k + 1) * voc_2].reshape(
-                (voc_length, voc_length)) for k in range(self.Kmax)}
+        return res.x[:self.voc_size], {
+            k: res.x[self.voc_size + k * voc_2:self.voc_size + (k + 1) * voc_2].reshape(
+                (self.voc_size, self.voc_size)) for k in range(self.Kmax)}
 
 
     def generate_sequence_metropolis(self, h, J, length=20, burn_in=1000):
@@ -151,7 +147,7 @@ class MaxEntropyMelodyGenerator:
             current_note = sequence[idx]
             context = self.build_context(sequence, idx)
             current_energy = h[current_note] + self.sum_energy_in_context(J, context, current_note)
-            proposed_note = random.choice([elt for elt in range(self.vocabulary_size()) if elt != current_note])
+            proposed_note = random.choice([elt for elt in range(self.voc_size) if elt != current_note])
             proposed_energy = h[proposed_note] + self.sum_energy_in_context(J, context, proposed_note)
             acceptance_ratio = min(1, np.exp(proposed_energy - current_energy))
             if random.random() < acceptance_ratio:
