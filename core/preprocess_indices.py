@@ -61,7 +61,8 @@ def compute_context_indices(contexts, kmax=0):
 
     Therefore J[R[µ]].sum() will give the total interaction potential for the context
     µ, as computer in the formula TODO reference to formula
-    in the paper TODO reference to paper.
+    in the paper
+    https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-017-08028-4/MediaObjects/41598_2017_8028_MOESM49_ESM.pdf
 
     Args:
         contexts: the 2D-array of contexts
@@ -140,7 +141,7 @@ def compute_normalization_context_indices(contexts, q: int, kmax: int = 0):
 
     Therefore J[R[µ, σ]].sum() will give the total interaction potential for the context
     µ and elements index σ, as computer in the formula TODO reference to formula
-    in the paper TODO reference to paper.
+    in the paper https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-017-08028-4/MediaObjects/41598_2017_8028_MOESM49_ESM.pdf.
 
     Args:
         contexts: the 2D-array of contexts
