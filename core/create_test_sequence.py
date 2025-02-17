@@ -28,7 +28,7 @@ def generate_sequence_3_notes(length=100):
         sequence.append(unique_notes[2])
     return sequence
 def generate_sequence_arpeggios(length=100):
-    unique_notes = [60, 62, 64, 65, 67, 69, 81]
+    unique_notes = [60, 62, 64, 65, 67, 69, 71]
     sequence = []
         # Sample next note
     start = 0
