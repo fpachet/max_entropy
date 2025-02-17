@@ -4,6 +4,7 @@ import numpy as np
 import mido
 from scipy.optimize import minimize
 import random
+import pickle
 from line_profiler_pycharm import profile
 
 
@@ -169,17 +170,24 @@ class MaxEntropyMelodyGenerator:
 
 
 # Utilisation
-# generator = MaxEntropyMelodyGenerator("../data/test_sequence_3notes.mid", Kmax=2)
-generator = MaxEntropyMelodyGenerator("../data/test_sequence_2notes.mid", Kmax=2)
+# generator = MaxEntropyMelodyGenerator("../data/test_sequence_3notes.mid", Kmax=3)
+# generator = MaxEntropyMelodyGenerator("../data/test_sequence_2notes.mid", Kmax=3)
 # generator = MaxEntropyMelodyGenerator("../data/test_sequence_arpeggios.mid", Kmax=5)
-t0 = time.perf_counter_ns()
-h_opt, J_opt = generator.train(max_iter=8)
-print(f"{h_opt=}")
+generator = MaxEntropyMelodyGenerator("../data/bach_partita_mono_short.mid", Kmax=10)
+# open a file, where you ant to store the data
+# [generator, h_opt, J_opt] = pickle.load(open("../data/last_generator.p", "rb"))
+# t0 = time.perf_counter_ns()
+h_opt, J_opt = generator.train(max_iter=20)
+# print(f"{h_opt=}")
 # print(f"{J_opt=}")
-t1 = time.perf_counter_ns()
-print(f"time: {(t1 - t0) / 1000000}")
-print(f"time: {generator.elapsed_ns_in_function / 1000000}ms")
-print(f"{generator.cpt_sum_energy=}")
-print(f"{generator.cpt_compute_partition=}")
-generated_sequence = generator.generate_sequence_metropolis(h_opt, J_opt, burn_in=500, length=30)
+# t1 = time.perf_counter_ns()
+
+pickle.dump([generator, h_opt, J_opt], open("../data/last_generator.p", "wb"))
+
+# print(f"time: {(t1 - t0) / 1000000}")
+# print(f"time: {generator.elapsed_ns_in_function / 1000000}ms")
+# print(f"{generator.cpt_sum_energy=}")
+# print(f"{generator.cpt_compute_partition=}")
+
+generated_sequence = generator.generate_sequence_metropolis(h_opt, J_opt, burn_in=800, length=30)
 generator.save_midi(generated_sequence, "../data/generated_melody.mid")
