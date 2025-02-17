@@ -134,4 +134,4 @@ def main(midi_file, output_midi, seq_length=10, generate_length=50, batch_size=1
 # main('input.mid', 'output.mid')
 
 # Example usage
-main('../data/prelude_c.mid', 'output.mid')
+main('../../data/prelude_c.mid', 'output.mid')

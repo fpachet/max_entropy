@@ -132,7 +132,7 @@ class MaxEntropyMusic:
 
 # Example Usage:
 music_model = MaxEntropyMusic(k_max=4, mc_steps=1000)
-sequence_path = '../data/test_sequence_2notes.mid'
+sequence_path = '../../data/test_sequence_2notes.mid'
 sequence = music_model.preprocess_midi(sequence_path)
 music_model.fit(sequence)
 generated_sequence = music_model.metropolis_sampling(10)

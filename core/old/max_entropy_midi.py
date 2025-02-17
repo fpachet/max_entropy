@@ -132,7 +132,7 @@ class MaxEntropyMusic:
 # Example Usage:
 music_model = MaxEntropyMusic(k_max=10)
 print('model done')
-sequence_path = '../data/test_sequence_2notes.mid'
+sequence_path = '../../data/test_sequence_2notes.mid'
 # sequence_path = '../data/test_sequence_2notes.mid'
 # sequence_path = '../data/bach_partita_mono.mid'
 sequence = music_model.preprocess_midi(sequence_path)
