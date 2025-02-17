@@ -6,7 +6,11 @@ from scipy.optimize import minimize
 import random
 import pickle
 from line_profiler_pycharm import profile
-
+"""
+A working version of the Max Entropy paper.
+Implementation follows the paper quite closely.
+Some examples at the end
+"""
 
 class MaxEntropyMelodyGenerator:
     def __init__(self, midi_file, Kmax=10, lambda_reg=1.0):

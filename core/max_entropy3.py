@@ -7,6 +7,12 @@ import random
 import pickle
 from line_profiler_pycharm import profile
 
+"""
+A more efficient version of the Max Entropy paper.
+Implementation follows the paper quite closely.
+contexts are created only once.
+Partition functions created only when necessary
+"""
 
 class MaxEntropyMelodyGenerator:
     def __init__(self, midi_file, Kmax=10, lambda_reg=1.0):
