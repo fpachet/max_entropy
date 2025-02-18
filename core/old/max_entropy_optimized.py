@@ -220,7 +220,7 @@ class MaxEntropyMelodyGenerator:
         mid.save(output_file)
 
 # Utilisation
-generator = MaxEntropyMelodyGenerator("../data/test_sequence_2notes.mid", Kmax=3)
+generator = MaxEntropyMelodyGenerator("../../data/test_sequence_2notes.mid", Kmax=3)
 # generator = MaxEntropyMelodyGenerator("../data/test_sequence_arpeggios.mid", Kmax=6)
 t0 = time.perf_counter_ns()
 h_opt, J_opt = generator.train(max_iter=4)

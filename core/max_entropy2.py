@@ -189,15 +189,15 @@ generator = MaxEntropyMelodyGenerator("../data/test_sequence_3notes.mid", Kmax=3
 # generator = MaxEntropyMelodyGenerator("../data/bach_partita_mono_short.mid", Kmax=10)
 # open a file, where you ant to store the data
 # [generator, h_opt, J_opt] = pickle.load(open("../data/bach_partita_short_generator.p", "rb"))
-# t0 = time.perf_counter_ns()
+t0 = time.perf_counter_ns()
 h_opt, J_opt = generator.train(max_iter=20)
 print(f"{h_opt=}")
 print(f"{J_opt=}")
-# t1 = time.perf_counter_ns()
+t1 = time.perf_counter_ns()
 
 # pickle.dump([generator, h_opt, J_opt], open("../data/last_generator.p", "wb"))
 
-# print(f"time: {(t1 - t0) / 1000000}")
+print(f"time: {(t1 - t0) / 1000000}")
 print(f"time: {generator.elapsed_ns_in_sum_energy_in_context / 1000000}ms")
 print(f"{generator.cpt_sum_energy=}")
 print(f"{generator.cpt_compute_partition=}")

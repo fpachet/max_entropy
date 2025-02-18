@@ -17,6 +17,7 @@ Partition functions created only when necessary
 class MaxEntropyMelodyGenerator:
     def __init__(self, midi_file, Kmax=10, lambda_reg=1.0):
         self.elapsed_ns_in_sum_energy_in_context = 0
+        self.elapsed_ns_in_compute_partition = 0
         self.midi_file = midi_file
         self.Kmax = Kmax
         self.lambda_reg = lambda_reg
@@ -49,8 +50,8 @@ class MaxEntropyMelodyGenerator:
 
     @profile
     def sum_energy_in_context(self, J, context, center):
-        self.cpt_sum_energy += 1
-        t0 = time.perf_counter_ns()
+        # self.cpt_sum_energy += 1
+        # t0 = time.perf_counter_ns()
         # center is not necessarily the center of context
         energy = 0
         for k in range(self.Kmax):
@@ -59,17 +60,19 @@ class MaxEntropyMelodyGenerator:
                 energy += j_k[context.get(-k - 1), center]
             if k + 1 in context:
                 energy += j_k[center, context.get(k + 1)]
-        self.elapsed_ns_in_sum_energy_in_context += (time.perf_counter_ns() - t0)
+        # self.elapsed_ns_in_sum_energy_in_context += (time.perf_counter_ns() - t0)
         return energy
 
     @profile
     def compute_partition_function(self, h, J, context):
         # return np.exp([h[sigma] + self.sum_energy_in_context(J, context, sigma) for sigma in range(self.vocabulary_size())]).sum()
+        # t0 = time.perf_counter_ns()
         self.cpt_compute_partition += 1
         z = 0
         for sigma in range(self.voc_size):
             energy = h[sigma] + self.sum_energy_in_context(J, context, sigma)
             z += np.exp(energy)
+        # self.elapsed_ns_in_compute_partition += (time.perf_counter_ns() - t0)
         return z
 
     @profile
@@ -84,7 +87,6 @@ class MaxEntropyMelodyGenerator:
         loss = 0
         M = len(self.seq)
         for i, s_0 in enumerate(self.seq):
-            # context = self.build_context(self.seq, i)
             context = self.all_contexts[i]
             Z = self.compute_partition_function(h, J, context)
             energy = h[s_0] + self.sum_energy_in_context(J, context, s_0)
@@ -129,9 +131,7 @@ class MaxEntropyMelodyGenerator:
             for mu, s_0 in enumerate(self.seq):
                 if r == s_0:
                     sum_grad += 1
-                # context = self.build_context(self.seq, mu)
                 context = self.all_contexts[mu]
-                # Z = self.compute_partition_function(h, J, context)
                 Z = all_partitions[mu]
                 expo = np.exp(h[r] + self.sum_energy_in_context(J, context, r))
                 sum_grad -= expo / Z
@@ -142,9 +142,7 @@ class MaxEntropyMelodyGenerator:
                 for r2 in range(self.voc_size):
                     prob = 0
                     for mu, s_0 in enumerate(self.seq):
-                        # context = self.build_context(self.seq, mu)
                         context = self.all_contexts[mu]
-                        # Z = self.compute_partition_function(h, J, context)
                         Z = all_partitions[mu]
                         if mu - k - 1 >= 0 and r == self.seq[mu - k - 1]:
                             if r2 == s_0:
@@ -199,22 +197,23 @@ class MaxEntropyMelodyGenerator:
 
 
 # Utilisation
-generator = MaxEntropyMelodyGenerator("../data/test_sequence_3notes.mid", Kmax=3)
+# generator = MaxEntropyMelodyGenerator("../data/test_sequence_3notes.mid", Kmax=3)
 # generator = MaxEntropyMelodyGenerator("../data/test_sequence_2notes.mid", Kmax=3)
 # generator = MaxEntropyMelodyGenerator("../data/test_sequence_arpeggios.mid", Kmax=5)
-# generator = MaxEntropyMelodyGenerator("../data/bach_partita_mono.mid", Kmax=10)
+generator = MaxEntropyMelodyGenerator("../data/bach_partita_mono.mid", Kmax=10)
 # open a file, where you ant to store the data
 # [generator, h_opt, J_opt] = pickle.load(open("../data/bach_partita_short_generator.p", "rb"))
-# t0 = time.perf_counter_ns()
-h_opt, J_opt = generator.train(max_iter=20)
+t0 = time.perf_counter_ns()
+h_opt, J_opt = generator.train(max_iter=10)
 print(f"{h_opt=}")
 print(f"{J_opt=}")
-# t1 = time.perf_counter_ns()
+t1 = time.perf_counter_ns()
 
 # pickle.dump([generator, h_opt, J_opt], open("../data/last_generator.p", "wb"))
 
-# print(f"time: {(t1 - t0) / 1000000}")
-print(f"time: {generator.elapsed_ns_in_sum_energy_in_context / 1000000}ms")
+print(f"total time: {(t1 - t0) / 1000000}")
+print(f"time in sum_energy_in_context: {generator.elapsed_ns_in_sum_energy_in_context / 1000000}ms")
+print(f"time in compute_partition: {generator.elapsed_ns_in_compute_partition / 1000000}ms")
 print(f"{generator.cpt_sum_energy=}")
 print(f"{generator.cpt_compute_partition=}")
 print(f"{generator.cpt_compute_gradient=}")
