@@ -41,7 +41,7 @@ def compute_contexts(idx_seq: list[int], /, *, kmax: int, padding=-1) -> NDArray
 
 
 @timeit
-def compute_context_indices(contexts, kmax=0) -> NDArrayInt:
+def compute_context_indices(contexts: NDArrayInt, kmax: int = 0) -> NDArrayInt:
     """
     Compute the indices of each context in J, the 3D-array of interaction potentials.
 
