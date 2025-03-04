@@ -5,6 +5,7 @@ https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-017-08028-4/Media
 
 import numpy as np
 import numpy.typing as npt
+from scipy.optimize import minimize
 
 from core.max_entropy4 import MaxEntropyMelodyGenerator
 from maxent_np import NDArrayInt
@@ -13,7 +14,10 @@ from maxent_np.preprocess_indices import (
     compute_context_indices,
     compute_partition_context_indices,
 )
-from utils.profiler import timeit
+from utils.profiler import Timeit
+
+
+# from utils.profiler import Timeit
 
 
 class MaxEnt:
@@ -65,7 +69,7 @@ class MaxEnt:
             self.J[self.J5]; this is a lot faster than using for loops; this is used to
             compute Formula 5.
 
-        K7: npt.NDArray[bool] — 2D-numpy array of shape (q, M), K7[µ, σ] is True if, and
+        K7: npt.NDArray[bool] — 2D-numpy array of shape (q, M), K7[σ, mu] is True if, and
             only if, S[µ] == σ; this is used to compute Formula 7.
     """
 
@@ -85,6 +89,8 @@ class MaxEnt:
     J5: tuple[NDArrayInt, ...]
     J6: tuple[NDArrayInt, ...]
     J7: tuple[NDArrayInt, ...]
+
+    K7: npt.NDArray[bool]
 
     # λ in the paper, the lambda regularization parameter
     l: float
@@ -106,15 +112,15 @@ class MaxEnt:
         self.Z = np.zeros(self.M, dtype=float)
 
         # init h with h[:q] = [0, 1/q, 2/q, ..., 1] and h[q] = PADDING
-        # self.h = np.zeros(self.q, dtype=float)
-        self.h = np.linspace(0, 1, self.q)
+        self.h = np.zeros(self.q, dtype=float)
+        # self.h = np.linspace(0, 1, self.q)
 
         # init J with j_init and an additional row of zeros at the end and an
         # additional column of zeros at the end of each row
 
         self.J = np.zeros((self.K, self.q + 1, self.q + 1), dtype=float)
-        j_init = np.linspace(0, 1, self.q**2).reshape(self.q, self.q)
-        self.J[:, : self.q, : self.q] = j_init
+        # j_init = np.linspace(0, 1, self.q**2).reshape(self.q, self.q)
+        # self.J[:, : self.q, : self.q] = j_init
 
         self.C = compute_contexts(
             index_training_seq,
@@ -164,9 +170,7 @@ class MaxEnt:
             self.partition_context_indices.append(matrix_mu_sigma)
 
         self.compute_z()
-        print(self.nll())
 
-    @timeit
     def compute_z(self):
         """
         Compute the partition function Z for each context µ in the training sequence.
@@ -194,16 +198,6 @@ class MaxEnt:
         # formula for Z
         self.Z = np.sum(np.exp(np.sum(h_plus_all_j, axis=2)), axis=1)
 
-    @timeit
-    def compute_z_slow(self):
-        """DO NOT USE — ONLY HERE FOR TESTING PURPOSES"""
-        for mu in range(self.M):
-            self.Z[mu] = 0.0
-            for sigma in range(self.q):
-                indices = self.partition_context_indices[mu][sigma]
-                self.Z[mu] += np.exp(self.h[sigma] + self.J[indices].sum())
-
-    @timeit
     def nll(self):
         """
         Compute the negative log-likelihood of the model given the training sequence.
@@ -217,9 +211,10 @@ class MaxEnt:
         sum_j = self.J[self.J5].sum()
         log_z = np.log(self.Z).sum()
         norm1_j = np.sum(np.abs(self.J))
-        return (-(sum_h + sum_j - log_z) + self.l * norm1_j) / self.M
+        loss = (-(sum_h + sum_j - log_z) + self.l * norm1_j) / self.M
+        print("loss={loss}".format(loss=loss))
+        return loss
 
-    @timeit
     def grad_loc_field(self):
         """
         Formula (7) in the referenced paper.
@@ -231,42 +226,111 @@ class MaxEnt:
         h_plus_sum_potentials = self.h[:, None] + sum_potentials
         return -(self.K7 - np.exp(h_plus_sum_potentials) / self.Z).sum(axis=1) / self.M
 
-    @timeit
-    def grad_loc_field_slow(self):
-        """
-        DO NOT USE — ONLY HERE FOR TESTING PURPOSES
-        """
-        dg_dh = np.zeros(self.q)
-        for r in range(self.q):
-            dg_dh[r] = 0
-            for mu in range(self.M):
-                if self.S[mu] == r:
-                    dg_dh[r] += 1
-                dg_dh[r] -= (1 / self.Z[mu]) * np.exp(
-                    self.h[r] + self.J[tuple(self.partition_ix[mu, r])].sum()
-                )
-        return -dg_dh / self.M
+    def sum_kronecker_1_arr(self, k):
+        row_r = np.hstack(
+            [
+                np.full((self.q, k + 1), fill_value=False, dtype=bool),
+                self.K7[:, : self.M - (k + 1)],
+            ]
+        )
+        row_r2 = self.K7[:]
+        return -np.count_nonzero(row_r[:, None] * row_r2, axis=2)
 
-    @timeit
+    def sum_kronecker_2_arr(self, k):
+        row_r = self.K7[:]
+        row_r2 = np.hstack(
+            [
+                self.K7[:, k + 1 :],
+                np.full((self.q, k + 1), fill_value=False, dtype=bool),
+            ]
+        )
+        return -np.count_nonzero(row_r[:, None] * row_r2, axis=2)
+
+    def exp1_fast(self, k):
+        kronecker = np.hstack(
+            [
+                np.full((self.q, k + 1), fill_value=False, dtype=bool),
+                self.K7[:, : self.M - (k + 1)],
+            ]
+        )
+        sum_potentials = np.sum(self.J[self.J7].reshape(self.q, self.M, -1), axis=2)
+        h_plus_sum_potentials = self.h[:, None] + sum_potentials
+        normalized_exp = np.exp(h_plus_sum_potentials) / self.Z
+        return -np.sum(kronecker.reshape(self.q, 1, -1) * normalized_exp, axis=2)
+
+    def exp2_fast(self, k):
+        kronecker = np.hstack(
+            [
+                self.K7[:, k + 1 :],
+                np.full((self.q, k + 1), fill_value=False, dtype=bool),
+            ]
+        )
+        sum_potentials = np.sum(self.J[self.J7].reshape(self.q, self.M, -1), axis=2)
+        h_plus_sum_potentials = self.h[:, None] + sum_potentials
+        normalized_exp = np.exp(h_plus_sum_potentials) / self.Z
+        res = -np.sum(kronecker.reshape(self.q, 1, -1) * normalized_exp, axis=2)
+        return np.swapaxes(res, 0, 1)
+
+    def regularization(self):
+        return self.l * np.abs(self.J[:, : self.q, : self.q])
+
     def grad_inter_pot(self):
         """
         Formula (8) in the referenced paper.
         Returns:
             a 1D-numpy array of shape (q)
         """
-        dg_dJ = np.zeros((self.K, self.q, self.q))
+        dg_dj = np.zeros((self.K, self.q, self.q))
         for k in range(self.K):
-            for r in range(self.q):
-                for r2 in range(self.q):
-                    ...
-        return dg_dJ / self.M
+            exp1_term = self.exp1_fast(k)
+            exp2_term = self.exp2_fast(k)
+            k1 = self.sum_kronecker_1_arr(k)
+            k2 = self.sum_kronecker_2_arr(k)
+            dg_dj[k] = k1 + k2 - exp1_term - exp2_term
+        dg_dj += self.regularization()
+        return dg_dj / self.M
+
+    def nll_and_grad(self, params):
+        self.h = params[: self.q]
+        j_flat = params[self.q :]
+        j_shaped = j_flat.reshape(self.K, self.q, self.q)
+        self.J[:, : self.q, : self.q] = j_shaped
+        self.compute_z()
+        flat_grad = np.concatenate(
+            [self.grad_loc_field(), self.grad_inter_pot().reshape(-1)]
+        )
+        return self.nll(), flat_grad
+
+    @Timeit
+    def train(self, max_iter=1000):
+        q_square = self.q**2
+        params_init = np.zeros(self.q + self.K * q_square)
+        res = minimize(
+            self.nll_and_grad,
+            params_init,
+            method="L-BFGS-B",
+            jac=True,
+            options={"maxiter": max_iter},
+        )
+        return res.x[: self.q], {
+            k: res.x[self.q + k * q_square : self.q + (k + 1) * q_square].reshape(
+                (self.q, self.q)
+            )
+            for k in range(self.K)
+        }
 
 
 if __name__ == "__main__":
-    g = MaxEntropyMelodyGenerator("../data/test_sequence_3notes.mid", Kmax=10)
+    g = MaxEntropyMelodyGenerator("../data/bach_partita_mono.midi", Kmax=10)
 
-    me = MaxEnt(g.seq, q=g.voc_size, kmax=5)
-    print(f"Z = {me.Z}")
-    print(f"NLL = {me.nll()}")
-    print(f"Loc. grad. = {me.grad_loc_field()}")
-    print(f"Loc. grad. = {me.grad_loc_field_slow()}")
+    me = MaxEnt(g.seq, q=g.voc_size, kmax=10)
+    # np.set_printoptions(threshold=sys.maxsize)
+    # print(f"Z = {me.Z}")
+    # print(f"NLL = {me.nll()}")
+    # print(f"Loc. grad. = {me.grad_loc_field().reshape(-1)}")
+    # print(f"Inter. pot. grad. = {me.grad_inter_pot().reshape(-1)}")
+
+    # Timeit.all_info()
+
+    me.train(max_iter=1000000)
+    Timeit.all_info()

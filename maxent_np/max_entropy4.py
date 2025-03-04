@@ -2,12 +2,13 @@ import time
 
 import numpy as np
 import mido
+import sys
 from scipy.optimize import minimize
 import random
 import pickle
 
 
-from utils.profiler import timeit
+# from utils.profiler import timeit
 
 """
 A more efficient version of the Max Entropy paper.
@@ -109,11 +110,12 @@ class MaxEntropyMelodyGenerator:
         self.elapsed_ns_in_negative_log_likelihood_and_gradient += (
             time.perf_counter_ns() - t0
         )
-        return (
-            self.all_partitions,
-            self.negative_log_likelihood(h, J),
-            self.gradient(h, J),
-        )
+        return result
+        # return (
+        #     self.all_partitions,
+        #     self.negative_log_likelihood(h, J),
+        #     self.gradient(h, J),
+        # )
 
     def compute_all_Z(self, J, h):
         for mu, s_0 in enumerate(self.seq):
@@ -121,7 +123,7 @@ class MaxEntropyMelodyGenerator:
                 h, J, self.all_contexts[mu]
             )
 
-    @timeit
+    # @timeit
     def negative_log_likelihood(self, h, J):
         self.cpt_compute_likelihood += 1
         loss = 0
@@ -138,7 +140,7 @@ class MaxEntropyMelodyGenerator:
         print(f"{loss=}")
         return loss
 
-    @timeit
+    # @timeit
     def gradient(self, h, J):
         self.cpt_compute_gradient += 1
         grad_h = np.zeros_like(h)
@@ -243,15 +245,20 @@ class MaxEntropyMelodyGenerator:
 
 
 if __name__ == "__main__":
-    K_max = 5
-    generator = MaxEntropyMelodyGenerator(
-        "../data/test_sequence_3notes.mid", Kmax=K_max
-    )
-    h = np.linspace(0, 1, generator.voc_size)
-    _J = np.linspace(0, 1, generator.voc_size**2).reshape(-1)
-    J = np.tile(_J, K_max).reshape(-1)
-    params = np.concat([h, J])
-    Z, nll, grad = generator.negative_log_likelihood_and_gradient(params)
-    print(f"Z = {Z}")
-    print(f"NLL = {nll}")
-    print(f"Loc. grad. = {grad}")
+    K_max = 10
+    t0 = time.perf_counter()
+    np.set_printoptions(threshold=sys.maxsize)
+    generator = MaxEntropyMelodyGenerator("../data/bach_partita_mono.midi", Kmax=K_max)
+    # h = np.linspace(0, 1, generator.voc_size)
+    # _J = np.linspace(0, 1, generator.voc_size**2).reshape(-1)
+    # J = np.tile(_J, K_max).reshape(-1)
+    # params = np.concat([h, J])
+    # Z, nll, grad = generator.negative_log_likelihood_and_gradient(params)
+    # print(f"Z = {Z}")
+    # print(f"NLL = {nll}")
+    # print(f"Loc. grad. = {np.array2string(grad)}")
+
+    print("START TRAINING")
+    h_opt, J_opt = generator.train(max_iter=1000)
+    print("END TRAINING")
+    print(f"Total time: {time.perf_counter() - t0}s")
