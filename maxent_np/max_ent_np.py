@@ -3,6 +3,8 @@ Compute formula (5) (6) in paper.
 https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-017-08028-4/MediaObjects/41598_2017_8028_MOESM49_ESM.pdf
 """
 
+import time
+
 import numpy as np
 import numpy.typing as npt
 from scipy.optimize import minimize
@@ -15,9 +17,6 @@ from maxent_np.preprocess_indices import (
     compute_partition_context_indices,
 )
 from utils.profiler import Timeit
-
-
-# from utils.profiler import Timeit
 
 
 class MaxEnt:
@@ -171,6 +170,7 @@ class MaxEnt:
 
         self.compute_z()
 
+    @Timeit
     def compute_z(self):
         """
         Compute the partition function Z for each context µ in the training sequence.
@@ -215,18 +215,20 @@ class MaxEnt:
         print("loss={loss}".format(loss=loss))
         return loss
 
-    def grad_loc_field(self):
+    @Timeit
+    def _grad_loc_field(self, _j_j7):
         """
         Formula (7) in the referenced paper.
 
         Returns:
             a 1D-numpy array of shape (q)
         """
-        sum_potentials = np.sum(self.J[self.J7].reshape(self.q, self.M, -1), axis=2)
+        sum_potentials = np.sum(_j_j7.reshape(self.q, self.M, -1), axis=2)
         h_plus_sum_potentials = self.h[:, None] + sum_potentials
         return -(self.K7 - np.exp(h_plus_sum_potentials) / self.Z).sum(axis=1) / self.M
 
-    def sum_kronecker_1_arr(self, k):
+    @Timeit
+    def sum_kronecker_1(self, k):
         row_r = np.hstack(
             [
                 np.full((self.q, k + 1), fill_value=False, dtype=bool),
@@ -236,7 +238,8 @@ class MaxEnt:
         row_r2 = self.K7[:]
         return -np.count_nonzero(row_r[:, None] * row_r2, axis=2)
 
-    def sum_kronecker_2_arr(self, k):
+    @Timeit
+    def sum_kronecker_2(self, k):
         row_r = self.K7[:]
         row_r2 = np.hstack(
             [
@@ -246,65 +249,122 @@ class MaxEnt:
         )
         return -np.count_nonzero(row_r[:, None] * row_r2, axis=2)
 
-    def exp1_fast(self, k):
+    @Timeit
+    def exp1(self, k, _j_j7):
         kronecker = np.hstack(
             [
                 np.full((self.q, k + 1), fill_value=False, dtype=bool),
                 self.K7[:, : self.M - (k + 1)],
             ]
         )
-        sum_potentials = np.sum(self.J[self.J7].reshape(self.q, self.M, -1), axis=2)
+        sum_potentials = np.sum(_j_j7.reshape(self.q, self.M, -1), axis=2)
         h_plus_sum_potentials = self.h[:, None] + sum_potentials
         normalized_exp = np.exp(h_plus_sum_potentials) / self.Z
         return -np.sum(kronecker.reshape(self.q, 1, -1) * normalized_exp, axis=2)
 
-    def exp2_fast(self, k):
+    @Timeit
+    def exp1_experimental(self, _j_j7):
+        kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
+        for k in range(self.K):
+            kronecker[k] = np.hstack(
+                [
+                    np.full((self.q, k + 1), fill_value=False, dtype=bool),
+                    self.K7[:, : self.M - (k + 1)],
+                ]
+            )
+        sum_potentials = np.sum(_j_j7.reshape(self.q, self.M, -1), axis=2)
+        h_plus_sum_potentials = self.h[:, None] + sum_potentials
+        normalized_exp = np.exp(h_plus_sum_potentials) / self.Z
+        res = -np.sum(
+            kronecker.reshape(self.K, self.q, 1, self.M)
+            * normalized_exp.reshape(1, self.q, self.M),
+            axis=3,
+        )
+        return res
+
+    @Timeit
+    def exp2(self, k, _j_j7):
         kronecker = np.hstack(
             [
                 self.K7[:, k + 1 :],
                 np.full((self.q, k + 1), fill_value=False, dtype=bool),
             ]
         )
-        sum_potentials = np.sum(self.J[self.J7].reshape(self.q, self.M, -1), axis=2)
+        sum_potentials = np.sum(_j_j7.reshape(self.q, self.M, -1), axis=2)
         h_plus_sum_potentials = self.h[:, None] + sum_potentials
         normalized_exp = np.exp(h_plus_sum_potentials) / self.Z
         res = -np.sum(kronecker.reshape(self.q, 1, -1) * normalized_exp, axis=2)
         return np.swapaxes(res, 0, 1)
 
+    @Timeit
+    def exp2_experimental(self, _j_j7):
+        kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
+        for k in range(self.K):
+            kronecker[k] = np.hstack(
+                [
+                    self.K7[:, k + 1 :],
+                    np.full((self.q, k + 1), fill_value=False, dtype=bool),
+                ]
+            )
+        sum_potentials = np.sum(_j_j7.reshape(self.q, self.M, -1), axis=2)
+        h_plus_sum_potentials = self.h[:, None] + sum_potentials
+        normalized_exp = np.exp(h_plus_sum_potentials) / self.Z
+        res = -np.sum(
+            kronecker.reshape(self.K, self.q, 1, self.M)
+            * normalized_exp.reshape(1, self.q, self.M),
+            axis=3,
+        )
+        return np.swapaxes(res, 1, 2)
+
+    @Timeit
+    def J_J7(self):
+        return self.J[self.J7]
+
+    @Timeit
     def regularization(self):
         return self.l * np.abs(self.J[:, : self.q, : self.q])
 
-    def grad_inter_pot(self):
+    @Timeit
+    def _grad_inter_pot(self, _j_j7):
         """
         Formula (8) in the referenced paper.
         Returns:
             a 1D-numpy array of shape (q)
         """
         dg_dj = np.zeros((self.K, self.q, self.q))
+        exp1_all_k = self.exp1_experimental(_j_j7)
+        exp2_all_k = self.exp2_experimental(_j_j7)
         for k in range(self.K):
-            exp1_term = self.exp1_fast(k)
-            exp2_term = self.exp2_fast(k)
-            k1 = self.sum_kronecker_1_arr(k)
-            k2 = self.sum_kronecker_2_arr(k)
+            exp1_term = exp1_all_k[k]
+            exp2_term = exp2_all_k[k]
+            k1 = self.sum_kronecker_1(k)
+            k2 = self.sum_kronecker_2(k)
             dg_dj[k] = k1 + k2 - exp1_term - exp2_term
         dg_dj += self.regularization()
         return dg_dj / self.M
 
-    def nll_and_grad(self, params):
+    @Timeit
+    def update_arrays_from_params(self, params: npt.NDArray[float]):
         self.h = params[: self.q]
-        j_flat = params[self.q :]
-        j_shaped = j_flat.reshape(self.K, self.q, self.q)
-        self.J[:, : self.q, : self.q] = j_shaped
+        self.J[:, : self.q, : self.q] = params[self.q :].reshape(self.K, self.q, self.q)
+
+    @Timeit
+    def arrays_to_params(self):
+        return np.concatenate([self.h, self.J[:, : self.q, : self.q].reshape(-1)])
+
+    @Timeit
+    def nll_and_grad(self, params):
+        self.update_arrays_from_params(params)
         self.compute_z()
+        _j_j7 = self.J_J7()
         flat_grad = np.concatenate(
-            [self.grad_loc_field(), self.grad_inter_pot().reshape(-1)]
+            [self._grad_loc_field(_j_j7), self._grad_inter_pot(_j_j7).reshape(-1)]
         )
         return self.nll(), flat_grad
 
     @Timeit
     def train(self, max_iter=1000):
-        q_square = self.q**2
-        params_init = np.zeros(self.q + self.K * q_square)
+        params_init = np.zeros(self.q + self.K * self.q * self.q)
         res = minimize(
             self.nll_and_grad,
             params_init,
@@ -313,9 +373,9 @@ class MaxEnt:
             options={"maxiter": max_iter},
         )
         return res.x[: self.q], {
-            k: res.x[self.q + k * q_square : self.q + (k + 1) * q_square].reshape(
-                (self.q, self.q)
-            )
+            k: res.x[
+                self.q + k * self.q * self.q : self.q + (k + 1) * self.q * self.q
+            ].reshape((self.q, self.q))
             for k in range(self.K)
         }
 
@@ -323,14 +383,6 @@ class MaxEnt:
 if __name__ == "__main__":
     g = MaxEntropyMelodyGenerator("../data/bach_partita_mono.midi", Kmax=10)
 
-    me = MaxEnt(g.seq, q=g.voc_size, kmax=10)
-    # np.set_printoptions(threshold=sys.maxsize)
-    # print(f"Z = {me.Z}")
-    # print(f"NLL = {me.nll()}")
-    # print(f"Loc. grad. = {me.grad_loc_field().reshape(-1)}")
-    # print(f"Inter. pot. grad. = {me.grad_inter_pot().reshape(-1)}")
+    MaxEnt(g.seq, q=g.voc_size, kmax=g.Kmax).train(max_iter=10000)
 
-    # Timeit.all_info()
-
-    me.train(max_iter=1000000)
     Timeit.all_info()
