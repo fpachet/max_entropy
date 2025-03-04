@@ -236,7 +236,24 @@ class MaxEnt:
             ]
         )
         row_r2 = self.K7[:]
-        return -np.count_nonzero(row_r[:, None] * row_r2, axis=2)
+        return -np.count_nonzero(row_r.reshape(self.q, 1, self.M) * row_r2, axis=2)
+
+    @Timeit
+    def sum_kronecker_1_experimental(self):
+        kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
+        for k in range(self.K):
+            kronecker[k] = np.hstack(
+                [
+                    np.full((self.q, k + 1), fill_value=False, dtype=bool),
+                    self.K7[:, : self.M - (k + 1)],
+                ]
+            )
+        row_r2 = self.K7[:]
+        return -np.count_nonzero(
+            kronecker.reshape(self.K, self.q, 1, self.M)
+            * row_r2.reshape(1, self.q, self.M),
+            axis=3,
+        )
 
     @Timeit
     def sum_kronecker_2(self, k):
@@ -247,23 +264,27 @@ class MaxEnt:
                 np.full((self.q, k + 1), fill_value=False, dtype=bool),
             ]
         )
-        return -np.count_nonzero(row_r[:, None] * row_r2, axis=2)
+        return -np.count_nonzero(row_r.reshape(self.q, 1, self.M) * row_r2, axis=2)
 
     @Timeit
-    def exp1(self, k, _j_j7):
-        kronecker = np.hstack(
-            [
-                np.full((self.q, k + 1), fill_value=False, dtype=bool),
-                self.K7[:, : self.M - (k + 1)],
-            ]
+    def sum_kronecker_2_experimental(self):
+        row_r = self.K7[:]
+        kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
+        for k in range(self.K):
+            kronecker[k] = np.hstack(
+                [
+                    self.K7[:, k + 1 :],
+                    np.full((self.q, k + 1), fill_value=False, dtype=bool),
+                ]
+            )
+        return -np.count_nonzero(
+            row_r.reshape(self.q, 1, self.M)
+            * kronecker.reshape(self.K, 1, self.q, self.M),
+            axis=3,
         )
-        sum_potentials = np.sum(_j_j7.reshape(self.q, self.M, -1), axis=2)
-        h_plus_sum_potentials = self.h[:, None] + sum_potentials
-        normalized_exp = np.exp(h_plus_sum_potentials) / self.Z
-        return -np.sum(kronecker.reshape(self.q, 1, -1) * normalized_exp, axis=2)
 
     @Timeit
-    def exp1_experimental(self, _j_j7):
+    def exp1(self, _j_j7):
         kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
         for k in range(self.K):
             kronecker[k] = np.hstack(
@@ -283,21 +304,7 @@ class MaxEnt:
         return res
 
     @Timeit
-    def exp2(self, k, _j_j7):
-        kronecker = np.hstack(
-            [
-                self.K7[:, k + 1 :],
-                np.full((self.q, k + 1), fill_value=False, dtype=bool),
-            ]
-        )
-        sum_potentials = np.sum(_j_j7.reshape(self.q, self.M, -1), axis=2)
-        h_plus_sum_potentials = self.h[:, None] + sum_potentials
-        normalized_exp = np.exp(h_plus_sum_potentials) / self.Z
-        res = -np.sum(kronecker.reshape(self.q, 1, -1) * normalized_exp, axis=2)
-        return np.swapaxes(res, 0, 1)
-
-    @Timeit
-    def exp2_experimental(self, _j_j7):
+    def exp2(self, _j_j7):
         kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
         for k in range(self.K):
             kronecker[k] = np.hstack(
@@ -331,15 +338,21 @@ class MaxEnt:
         Returns:
             a 1D-numpy array of shape (q)
         """
-        dg_dj = np.zeros((self.K, self.q, self.q))
-        exp1_all_k = self.exp1_experimental(_j_j7)
-        exp2_all_k = self.exp2_experimental(_j_j7)
-        for k in range(self.K):
-            exp1_term = exp1_all_k[k]
-            exp2_term = exp2_all_k[k]
-            k1 = self.sum_kronecker_1(k)
-            k2 = self.sum_kronecker_2(k)
-            dg_dj[k] = k1 + k2 - exp1_term - exp2_term
+        # dg_dj = np.zeros((self.K, self.q, self.q))
+        exp1_all_k = self.exp1(_j_j7)
+        exp2_all_k = self.exp2(_j_j7)
+
+        kronecker1 = self.sum_kronecker_1_experimental()
+        kronecker2 = self.sum_kronecker_2_experimental()
+        #
+        # for k in range(self.K):
+        #     exp1_term = exp1_all_k[k]
+        #     exp2_term = exp2_all_k[k]
+        #     k1 = kronecker1[k]
+        #     k2 = kronecker2[k]
+        #     dg_dj[k] = k1 + k2 - exp1_term - exp2_term
+
+        dg_dj = kronecker1 + kronecker2 - exp1_all_k - exp2_all_k
         dg_dj += self.regularization()
         return dg_dj / self.M
 
