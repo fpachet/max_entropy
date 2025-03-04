@@ -1,5 +1,6 @@
 """
-Compute formula (5) (6) in paper.
+Implementation of paper, using mostly numpy arrays.
+
 https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-017-08028-4/MediaObjects/41598_2017_8028_MOESM49_ESM.pdf
 """
 
