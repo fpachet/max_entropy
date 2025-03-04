@@ -3,8 +3,6 @@ Compute formula (5) (6) in paper.
 https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-017-08028-4/MediaObjects/41598_2017_8028_MOESM49_ESM.pdf
 """
 
-import time
-
 import numpy as np
 import numpy.typing as npt
 from scipy.optimize import minimize
@@ -16,7 +14,8 @@ from maxent_np.preprocess_indices import (
     compute_context_indices,
     compute_partition_context_indices,
 )
-from utils.profiler import Timeit
+
+# from utils.profiler import Timeit
 
 
 class MaxEnt:
@@ -170,7 +169,7 @@ class MaxEnt:
 
         self.compute_z()
 
-    @Timeit
+    # @Timeit
     def compute_z(self):
         """
         Compute the partition function Z for each context µ in the training sequence.
@@ -215,7 +214,7 @@ class MaxEnt:
         print("loss={loss}".format(loss=loss))
         return loss
 
-    @Timeit
+    # @Timeit
     def _grad_loc_field(self, _j_j7):
         """
         Formula (7) in the referenced paper.
@@ -227,7 +226,7 @@ class MaxEnt:
         h_plus_sum_potentials = self.h[:, None] + sum_potentials
         return -(self.K7 - np.exp(h_plus_sum_potentials) / self.Z).sum(axis=1) / self.M
 
-    @Timeit
+    # @Timeit
     def sum_kronecker_1(self, k):
         row_r = np.hstack(
             [
@@ -238,24 +237,7 @@ class MaxEnt:
         row_r2 = self.K7[:]
         return -np.count_nonzero(row_r.reshape(self.q, 1, self.M) * row_r2, axis=2)
 
-    @Timeit
-    def sum_kronecker_1_experimental(self):
-        kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
-        for k in range(self.K):
-            kronecker[k] = np.hstack(
-                [
-                    np.full((self.q, k + 1), fill_value=False, dtype=bool),
-                    self.K7[:, : self.M - (k + 1)],
-                ]
-            )
-        row_r2 = self.K7[:]
-        return -np.count_nonzero(
-            kronecker.reshape(self.K, self.q, 1, self.M)
-            * row_r2.reshape(1, self.q, self.M),
-            axis=3,
-        )
-
-    @Timeit
+    # @Timeit
     def sum_kronecker_2(self, k):
         row_r = self.K7[:]
         row_r2 = np.hstack(
@@ -266,24 +248,7 @@ class MaxEnt:
         )
         return -np.count_nonzero(row_r.reshape(self.q, 1, self.M) * row_r2, axis=2)
 
-    @Timeit
-    def sum_kronecker_2_experimental(self):
-        row_r = self.K7[:]
-        kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
-        for k in range(self.K):
-            kronecker[k] = np.hstack(
-                [
-                    self.K7[:, k + 1 :],
-                    np.full((self.q, k + 1), fill_value=False, dtype=bool),
-                ]
-            )
-        return -np.count_nonzero(
-            row_r.reshape(self.q, 1, self.M)
-            * kronecker.reshape(self.K, 1, self.q, self.M),
-            axis=3,
-        )
-
-    @Timeit
+    # @Timeit
     def exp1(self, _j_j7):
         kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
         for k in range(self.K):
@@ -303,7 +268,7 @@ class MaxEnt:
         )
         return res
 
-    @Timeit
+    # @Timeit
     def exp2(self, _j_j7):
         kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
         for k in range(self.K):
@@ -323,59 +288,48 @@ class MaxEnt:
         )
         return np.swapaxes(res, 1, 2)
 
-    @Timeit
-    def J_J7(self):
-        return self.J[self.J7]
-
-    @Timeit
+    # @Timeit
     def regularization(self):
         return self.l * np.abs(self.J[:, : self.q, : self.q])
 
-    @Timeit
+    # @Timeit
     def _grad_inter_pot(self, _j_j7):
         """
         Formula (8) in the referenced paper.
         Returns:
             a 1D-numpy array of shape (q)
         """
-        # dg_dj = np.zeros((self.K, self.q, self.q))
-        exp1_all_k = self.exp1(_j_j7)
-        exp2_all_k = self.exp2(_j_j7)
+        dg_dj = -self.exp1(_j_j7)
+        dg_dj -= self.exp2(_j_j7)
 
-        kronecker1 = self.sum_kronecker_1_experimental()
-        kronecker2 = self.sum_kronecker_2_experimental()
-        #
-        # for k in range(self.K):
-        #     exp1_term = exp1_all_k[k]
-        #     exp2_term = exp2_all_k[k]
-        #     k1 = kronecker1[k]
-        #     k2 = kronecker2[k]
-        #     dg_dj[k] = k1 + k2 - exp1_term - exp2_term
+        for k in range(self.K):
+            dg_dj[k] += self.sum_kronecker_1(k)
+            dg_dj[k] += self.sum_kronecker_2(k)
 
-        dg_dj = kronecker1 + kronecker2 - exp1_all_k - exp2_all_k
         dg_dj += self.regularization()
+
         return dg_dj / self.M
 
-    @Timeit
+    # @Timeit
     def update_arrays_from_params(self, params: npt.NDArray[float]):
         self.h = params[: self.q]
         self.J[:, : self.q, : self.q] = params[self.q :].reshape(self.K, self.q, self.q)
 
-    @Timeit
+    # @Timeit
     def arrays_to_params(self):
         return np.concatenate([self.h, self.J[:, : self.q, : self.q].reshape(-1)])
 
-    @Timeit
+    # @Timeit
     def nll_and_grad(self, params):
         self.update_arrays_from_params(params)
         self.compute_z()
-        _j_j7 = self.J_J7()
+        _j_j7 = self.J[self.J7]
         flat_grad = np.concatenate(
             [self._grad_loc_field(_j_j7), self._grad_inter_pot(_j_j7).reshape(-1)]
         )
         return self.nll(), flat_grad
 
-    @Timeit
+    # @Timeit
     def train(self, max_iter=1000):
         params_init = np.zeros(self.q + self.K * self.q * self.q)
         res = minimize(
@@ -398,4 +352,4 @@ if __name__ == "__main__":
 
     MaxEnt(g.seq, q=g.voc_size, kmax=g.Kmax).train(max_iter=10000)
 
-    Timeit.all_info()
+    # Timeit.all_info()

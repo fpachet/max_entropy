@@ -8,6 +8,45 @@ They are kept here as they are much easier to understand.
 from utils.profiler import Timeit
 import numpy as np
 
+"""
+Methods that could be faster, but are not in practice
+"""
+
+
+@Timeit
+def sum_kronecker_1_experimental(self):
+    kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
+    for k in range(self.K):
+        kronecker[k] = np.hstack(
+            [
+                np.full((self.q, k + 1), fill_value=False, dtype=bool),
+                self.K7[:, : self.M - (k + 1)],
+            ]
+        )
+    row_r2 = self.K7[:]
+    return -np.count_nonzero(
+        kronecker.reshape(self.K, self.q, 1, self.M)
+        * row_r2.reshape(1, self.q, self.M),
+        axis=3,
+    )
+
+
+@Timeit
+def sum_kronecker_2_experimental(self):
+    row_r = self.K7[:]
+    kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
+    for k in range(self.K):
+        kronecker[k] = np.hstack(
+            [
+                self.K7[:, k + 1 :],
+                np.full((self.q, k + 1), fill_value=False, dtype=bool),
+            ]
+        )
+    return -np.count_nonzero(
+        row_r.reshape(self.q, 1, self.M) * kronecker.reshape(self.K, 1, self.q, self.M),
+        axis=3,
+    )
+
 
 @Timeit
 def compute_z_slow(self):
